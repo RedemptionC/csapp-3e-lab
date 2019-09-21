@@ -305,11 +305,14 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    if(waitpid(pid,NULL,WUNTRACED)<0)
-    {
-        unix_error("waitpid error");
-    }
-    deletejob(jobs,pid);
+    pid_t fpid;
+    while((fpid=fgpid(jobs))==pid)
+        sleep(0);/*pass control to kernel?NOT SURE*/
+    // if(waitpid(pid,NULL,WUNTRACED)<0)
+    // {
+    //     unix_error("waitpid error");
+    // }
+    // deletejob(jobs,pid);
 }
 
 /*****************
@@ -325,8 +328,13 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
-
-    return;
+    pid_t pid;
+    if((pid=waitpid(-1,NULL,0))<0)
+    {
+        unix_error("waitpid error");
+    }
+    deletejob(jobs,pid);
+    // return;
 }
 
 /* 
@@ -337,20 +345,13 @@ void sigchld_handler(int sig)
 void sigint_handler(int sig) 
 {
     /*terminate foreground job and child processes that it forked*/
-    int i;
-    for(i=0;i<MAXJOBS;i++)
-    {
-        if(jobs[i].state==FG)
-        {
-            break;
-        }
-    }
-    if(i<MAXJOBS)
+    pid_t fpid=fgpid(jobs);
+    int jid=pid2jid(fpid);
     {
         /*any fg job exists*/
-        printf("Job [%d] (%d) terminated by signal %d\n",jobs[i].jid,jobs[i].pid,SIGINT);
-        // kill(-jobs[i].pid,SIGINT);
-        kill(-jobs[i].pid,SIGKILL); /*好像发SIGKILL才是对的*/
+        printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
+        kill(fpid,SIGKILL); /*好像发SIGKILL才是对的*/
+                            /*这里本来要给fg job所在的组发sig，但是只知道它的pid，怎么知道组*/
     }
 }
 
