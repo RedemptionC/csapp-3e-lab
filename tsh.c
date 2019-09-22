@@ -345,11 +345,7 @@ void waitfg(pid_t pid)
     pid_t fpid;
     while((fpid=fgpid(jobs))==pid)
         sleep(0);/*pass control to kernel?NOT SURE*/
-    // if(waitpid(pid,NULL,WUNTRACED)<0)
-    // {
-    //     unix_error("waitpid error");
-    // }
-    // deletejob(jobs,pid);
+
 }
 
 /*****************
@@ -389,12 +385,8 @@ void sigint_handler(int sig)
     int jid=pid2jid(fpid);
     {
         /*any fg job exists*/
-        // setpgid(fpid,fpid);
         kill(-fpid,SIGINT); /*好像发SIGKILL才是对的*/
-        // kill(-fpid,SIGINT); /*需不需要两个kill?*/
         printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
-
-                            /*这里本来要给fg job所在的组发sig，但是只知道它的pid，怎么知道组*/
     }
     errno=olderrno;
 }
@@ -412,15 +404,7 @@ void sigtstp_handler(int sig)
     t->state=ST;
     int jid=pid2jid(fpid);
     printf("Job [%d] (%d) stopped by signal %d\n",jid,fpid,sig);
-    //......            /*还有，这里为什么是-fpid???因为这个前台job的child的组id全都是这个前台的pid?*/
     kill(-fpid,SIGTSTP);/*为什么明明这个handler和SIGTSTP绑定了，还可以在这个里面发SIGTSTP信号*/
-    // sigset_t mask;
-    // sigfillset(&mask);
-    // sigdelset(&mask,SIGCONT);
-    // // sigprocmask(SIG_SETMASK,&mask,&prev_mask);/*block all except sigcont*/
-
-    // while(t->state==ST)
-    //     sigsuspend(&mask);/*block all except sigcont*/
     errno=olderrno;
 }
 
