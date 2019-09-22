@@ -365,12 +365,14 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+    int olderrno=errno;
     pid_t pid;
     if((pid=waitpid(-1,NULL,0))<0)
     {
         unix_error("waitpid error");
     }
     deletejob(jobs,pid);
+    errno=olderrno;
     // return;
 }
 
@@ -381,6 +383,7 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+    int olderrno=errno;
     /*terminate foreground job and child processes that it forked*/
     pid_t fpid=fgpid(jobs);
     int jid=pid2jid(fpid);
@@ -393,6 +396,7 @@ void sigint_handler(int sig)
 
                             /*这里本来要给fg job所在的组发sig，但是只知道它的pid，怎么知道组*/
     }
+    errno=olderrno;
 }
 
 /*
@@ -402,6 +406,7 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+    int olderrno=errno;
     pid_t fpid=fgpid(jobs);
     struct job_t *t=getjobpid(jobs,fpid);
     t->state=ST;
@@ -416,6 +421,7 @@ void sigtstp_handler(int sig)
 
     // while(t->state==ST)
     //     sigsuspend(&mask);/*block all except sigcont*/
+    errno=olderrno;
 }
 
 /*********************
