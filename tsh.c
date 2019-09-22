@@ -402,6 +402,8 @@ void sigtstp_handler(int sig)
 {
     int olderrno=errno;
     pid_t fpid=fgpid(jobs);
+    if(fpid==0)
+    return;
     struct job_t *t=getjobpid(jobs,fpid);
     t->state=ST;
     int jid=pid2jid(fpid);
