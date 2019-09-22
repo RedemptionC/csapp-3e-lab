@@ -362,12 +362,16 @@ void waitfg(pid_t pid)
 void sigchld_handler(int sig) 
 {
     int olderrno=errno;
+    sigset_t mask_all,prev_mask;
+    sigfillset(&mask_all);
     pid_t pid;
     if((pid=waitpid(-1,NULL,0))<0)
     {
         unix_error("waitpid error");
     }
+    sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     deletejob(jobs,pid);
+    sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     errno=olderrno;
     // return;
 }
@@ -380,7 +384,10 @@ void sigchld_handler(int sig)
 void sigint_handler(int sig) 
 {
     int olderrno=errno;
+    sigset_t mask_all,prev_mask;
+    sigfillset(&mask_all);
     /*terminate foreground job and child processes that it forked*/
+    sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
         return;
@@ -390,6 +397,7 @@ void sigint_handler(int sig)
         kill(-fpid,SIGINT); 
         printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
     }
+    sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     errno=olderrno;
 }
 
@@ -401,15 +409,19 @@ void sigint_handler(int sig)
 void sigtstp_handler(int sig) 
 {
     int olderrno=errno;
+    sigset_t mask_all,prev_mask;
+    sigfillset(&mask_all);
+    sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
     return;
     struct job_t *t=getjobpid(jobs,fpid);
     t->state=ST;
-    int jid=pid2jid(fpid);
+    int jid=t->jid;
     printf("Job [%d] (%d) stopped by signal %d\n",jid,fpid,sig);
+    sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     kill(-fpid,SIGTSTP);/*为什么明明这个handler和SIGTSTP绑定了，还可以在这个里面发SIGTSTP信号*/
-    errno=olderrno;
+    errno=olderrno;     /*现在的问题是，一旦有任务stop，即调用了本函数return之后的代码，就不能list_job*/
 }
 
 /*********************
