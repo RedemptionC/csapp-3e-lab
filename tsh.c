@@ -187,6 +187,7 @@ void eval(char *cmdline)
 
         if((pid=fork())==0)
         {
+            setpgid(0,0);
             sigprocmask(SIG_SETMASK,&prev,NULL); /*unblock sigchld in child process*/
 
             if(execve(argv[0],argv,environ)<0)
@@ -282,6 +283,7 @@ int builtin_cmd(char **argv)
     if((!strcmp(argv[0],"bg"))||(!strcmp(argv[0],"fg")))
     {
         do_bgfg(argv);
+        return 1;
     }
     
     if(!strcmp(argv[0],"jobs"))
@@ -297,6 +299,41 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+    int jid=0,pid=0;
+    struct job_t *j=NULL;
+    if(argv[1][0]=='%')
+    {
+        int i=1;
+        while(argv[1][i]!='\0')
+        {
+            jid=jid*10+argv[1][i++]-'0';
+        }
+        j=getjobjid(jobs,jid);
+    }
+    else
+    {
+        /*using pid*/
+        pid=atoi(argv[1]);
+        j=getjobpid(jobs,pid);
+    }
+    
+    if(!strcmp(argv[0],"bg"))
+    {
+        j->state=BG;
+        printf("[%d] (%d) %s",jid,j->pid,j->cmdline);
+        kill(j->pid,SIGCONT);
+    }
+    else
+    {
+
+        if(j->state==ST)
+        {
+            kill(j->pid,SIGCONT);            
+        }
+        j->state=FG;
+        waitfg(j->pid);
+    }
+    
     return;
 }
 
@@ -349,8 +386,11 @@ void sigint_handler(int sig)
     int jid=pid2jid(fpid);
     {
         /*any fg job exists*/
+        // setpgid(fpid,fpid);
+        kill(-fpid,SIGINT); /*好像发SIGKILL才是对的*/
+        // kill(-fpid,SIGINT); /*需不需要两个kill?*/
         printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
-        kill(fpid,SIGKILL); /*好像发SIGKILL才是对的*/
+
                             /*这里本来要给fg job所在的组发sig，但是只知道它的pid，怎么知道组*/
     }
 }
@@ -362,7 +402,20 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
-    return;
+    pid_t fpid=fgpid(jobs);
+    struct job_t *t=getjobpid(jobs,fpid);
+    t->state=ST;
+    int jid=pid2jid(fpid);
+    printf("Job [%d] (%d) stopped by signal %d\n",jid,fpid,sig);
+    //......            /*还有，这里为什么是-fpid???因为这个前台job的child的组id全都是这个前台的pid?*/
+    kill(-fpid,SIGTSTP);/*为什么明明这个handler和SIGTSTP绑定了，还可以在这个里面发SIGTSTP信号*/
+    // sigset_t mask;
+    // sigfillset(&mask);
+    // sigdelset(&mask,SIGCONT);
+    // // sigprocmask(SIG_SETMASK,&mask,&prev_mask);/*block all except sigcont*/
+
+    // while(t->state==ST)
+    //     sigsuspend(&mask);/*block all except sigcont*/
 }
 
 /*********************
