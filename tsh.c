@@ -382,10 +382,12 @@ void sigint_handler(int sig)
     int olderrno=errno;
     /*terminate foreground job and child processes that it forked*/
     pid_t fpid=fgpid(jobs);
+    if(fpid==0)
+        return;
     int jid=pid2jid(fpid);
     {
         /*any fg job exists*/
-        kill(-fpid,SIGINT); /*好像发SIGKILL才是对的*/
+        kill(-fpid,SIGINT); 
         printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
     }
     errno=olderrno;
