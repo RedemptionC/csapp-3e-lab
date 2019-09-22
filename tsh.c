@@ -171,9 +171,10 @@ void eval(char *cmdline)
     int bg;
     pid_t pid;
     
-    sigset_t mask_one,prev;
+    sigset_t mask_one,prev,mask_all;
     sigemptyset(&mask_one);
     sigaddset(&mask_one,SIGCHLD);
+    sigfillset(&mask_all);
 
     strcpy(buf,cmdline);
     bg=parseline(buf,argv);
@@ -187,7 +188,7 @@ void eval(char *cmdline)
 
         if((pid=fork())==0)
         {
-            setpgid(0,0);
+            setpgid(0,0);/*每个子进程的进程组id都不再是父进程，而是自己的pid*/
             sigprocmask(SIG_SETMASK,&prev,NULL); /*unblock sigchld in child process*/
 
             if(execve(argv[0],argv,environ)<0)
@@ -198,6 +199,7 @@ void eval(char *cmdline)
         }
 
         int state=bg?BG:FG;
+        sigprocmask(SIG_SETMASK,&mask_all,NULL);
         addjob(jobs,pid,state,cmdline);
         sigprocmask(SIG_SETMASK,&prev,NULL);
         int jid=pid2jid(pid);
@@ -299,6 +301,11 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+    if(argv[1] == NULL)
+    {
+        printf("%s command requires PID or %%jobid argument\n",argv[0]);
+        return;
+    }
     int jid=0,pid=0;
     struct job_t *j=NULL;
     if(argv[1][0]=='%')
@@ -390,7 +397,10 @@ void sigint_handler(int sig)
     sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
+    {
+        errno=olderrno;
         return;
+    }
     int jid=pid2jid(fpid);
     {
         /*any fg job exists*/
@@ -414,7 +424,10 @@ void sigtstp_handler(int sig)
     sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
-    return;
+    {
+        errno=olderrno;
+        return;
+    }
     struct job_t *t=getjobpid(jobs,fpid);
     t->state=ST;
     int jid=t->jid;
