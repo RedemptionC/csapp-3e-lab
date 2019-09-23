@@ -349,9 +349,13 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+    sigset_t mask_all,prev_mask;
+    sigfillset(&mask_all);
+    sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     pid_t fpid;
     while((fpid=fgpid(jobs))==pid)
-        sleep(0);/*pass control to kernel?NOT SURE*/
+        sigsuspend(&prev_mask);
+    sigprocmask(SIG_SETMASK,&prev_mask,NULL);
 
 }
 
