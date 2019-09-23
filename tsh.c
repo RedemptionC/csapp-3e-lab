@@ -376,9 +376,14 @@ void sigchld_handler(int sig)
     sigset_t mask_all,prev_mask;
     sigfillset(&mask_all);
     pid_t pid;
-    if((pid=waitpid(-1,NULL,0))<0)
+    int status;
+    if((pid=waitpid(-1,&status,WUNTRACED))<0)
     {
         unix_error("waitpid error");
+    }
+    if(WIFSTOPPED(status))
+    {
+        return;
     }
     sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
     deletejob(jobs,pid);
@@ -406,11 +411,9 @@ void sigint_handler(int sig)
         return;
     }
     int jid=pid2jid(fpid);
-    {
-        /*any fg job exists*/
-        kill(-fpid,SIGINT); 
-        printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
-    }
+    /*any fg job exists*/
+    kill(-fpid,SIGINT); 
+    printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
     sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     errno=olderrno;
 }
