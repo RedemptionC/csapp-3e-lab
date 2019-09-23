@@ -319,11 +319,30 @@ void do_bgfg(char **argv)
     }
     else
     {
+        if(argv[1][0]>'9'||argv[1][0]<'0')
+        {
+            printf("%s: argument must be a PID or %%jobid\n",argv[0]);
+            return;
+        }
         /*using pid*/
         pid=atoi(argv[1]);
         j=getjobpid(jobs,pid);
     }
     
+    if(j==NULL)
+    {
+        if(argv[1][0]=='%')
+        {
+            printf("%s: NO such job\n",argv[1]);
+            return;
+        }
+        else
+        {
+            printf("%s: NO such process\n",argv[1]);
+            return;
+        }
+        
+    }
     if(!strcmp(argv[0],"bg"))
     {
         j->state=BG;
@@ -390,17 +409,24 @@ void sigchld_handler(int sig)
     int status;
     while((pid=waitpid(-1,&status,WUNTRACED||WNOHANG))>0)
     {
+        // printf("catch sig\n");
         // unix_error("waitpid error");
         if(WIFSTOPPED(status))
         {
-            // printf("sigchild handler catch tstp\n");
+            printf("sigchild handler catch tstp\n");
             return;
         }
         if(WIFCONTINUED(status))
         {
             return;
         }
-        sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
+        if(WIFSIGNALED(status))
+        {
+            printf("wifsignaled\n");
+            return;
+        }
+        // printf("sigchild handler not stop not continue \n");√
+        sigprocmask(SIG_SETMASK,&mask_all,&prev_mask); 
         deletejob(jobs,pid);
         sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     }
@@ -441,7 +467,7 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
-    // printf("tstp handler catch stop\n");
+    /*本函数只能处理发送到shell的信号，而子进程发给自己的信号会直接到sighandler*/
     int olderrno=errno;
     sigset_t mask_all,prev_mask;
     sigfillset(&mask_all);
@@ -458,7 +484,7 @@ void sigtstp_handler(int sig)
     int jid=t->jid;
     printf("Job [%d] (%d) stopped by signal %d\n",jid,fpid,sig);
     sigprocmask(SIG_SETMASK,&prev_mask,NULL);
-    kill(-fpid,SIGTSTP);/*为什么明明这个handler和SIGTSTP绑定了，还可以在这个里面发SIGTSTP信号*/
+    kill(-fpid,SIGTSTP);
     errno=olderrno;     /*现在的问题是，一旦有任务stop，即调用了本函数return之后的代码，就不能list_job*/
     // printf("tstp handler catch stop\n");
 }
