@@ -327,15 +327,26 @@ void do_bgfg(char **argv)
     if(!strcmp(argv[0],"bg"))
     {
         j->state=BG;
-        printf("[%d] (%d) %s",jid,j->pid,j->cmdline);
-        kill(j->pid,SIGCONT);
+        printf("[%d] (%d) %s",j->jid,j->pid,j->cmdline);
+        if(jid==0)  
+            kill(j->pid,SIGCONT);
+        else
+        {
+             kill(-j->pid,SIGCONT);
+        }
+        
     }
     else
     {
 
         if(j->state==ST)
         {
-            kill(j->pid,SIGCONT);            
+            if(jid==0)  
+                kill(j->pid,SIGCONT);
+            else
+            {
+                kill(-j->pid,SIGCONT);
+            }         
         }
         j->state=FG;
         waitfg(j->pid);
@@ -377,17 +388,22 @@ void sigchld_handler(int sig)
     sigfillset(&mask_all);
     pid_t pid;
     int status;
-    if((pid=waitpid(-1,&status,WUNTRACED))<0)
+    while((pid=waitpid(-1,&status,WUNTRACED||WNOHANG))>0)
     {
-        unix_error("waitpid error");
+        // unix_error("waitpid error");
+        if(WIFSTOPPED(status))
+        {
+            // printf("sigchild handler catch tstp\n");
+            return;
+        }
+        if(WIFCONTINUED(status))
+        {
+            return;
+        }
+        sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
+        deletejob(jobs,pid);
+        sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     }
-    if(WIFSTOPPED(status))
-    {
-        return;
-    }
-    sigprocmask(SIG_SETMASK,&mask_all,&prev_mask);
-    deletejob(jobs,pid);
-    sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     errno=olderrno;
     // return;
 }
@@ -425,6 +441,7 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+    // printf("tstp handler catch stop\n");
     int olderrno=errno;
     sigset_t mask_all,prev_mask;
     sigfillset(&mask_all);
@@ -432,6 +449,7 @@ void sigtstp_handler(int sig)
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
     {
+        // printf("no fg job\n");
         errno=olderrno;
         return;
     }
@@ -442,6 +460,7 @@ void sigtstp_handler(int sig)
     sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     kill(-fpid,SIGTSTP);/*为什么明明这个handler和SIGTSTP绑定了，还可以在这个里面发SIGTSTP信号*/
     errno=olderrno;     /*现在的问题是，一旦有任务stop，即调用了本函数return之后的代码，就不能list_job*/
+    // printf("tstp handler catch stop\n");
 }
 
 /*********************
