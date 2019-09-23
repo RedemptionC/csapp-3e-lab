@@ -407,13 +407,17 @@ void sigchld_handler(int sig)
     sigfillset(&mask_all);
     pid_t pid;
     int status;
-    printf("0.catch stop sig\n");
+    // printf("0.catch stop sig\n");
     while((pid=waitpid(-1,&status,WUNTRACED|WNOHANG))>0)
     {
-        printf("1.catch stop sig\n");
+        if(WIFEXITED(status))
+        {
+            deletejob(jobs,pid);
+        }
+        // printf("1.catch stop sig\n");
         if(WIFSTOPPED(status))
         {
-            printf("child proc send stop\n");
+            // printf("child proc send stop\n");
             pid_t pid=fgpid(jobs);
             struct job_t *j=getjobpid(jobs,pid);
             j->state=ST;
@@ -437,10 +441,10 @@ void sigchld_handler(int sig)
             return;
         }
 
-        printf("sigchild handler not stop not continue,pid %d \n",pid);
+        // printf("sigchild handler not stop not continue,pid %d \n",pid);
 
     }
-    printf("2.catch stop sig\n");
+    // printf("2.catch stop sig\n");
     errno=olderrno;
 }
 
@@ -490,7 +494,7 @@ void sigtstp_handler(int sig)
         errno=olderrno;
         return;
     }
-    printf("catch sig\n");
+    // printf("catch sig\n");
     // struct job_t *t=getjobpid(jobs,fpid);
     // t->state=ST;
     // int jid=t->jid;
@@ -498,7 +502,7 @@ void sigtstp_handler(int sig)
     sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     kill(-fpid,SIGTSTP);
     errno=olderrno;     
-    printf("tstp handler catch stop\n");
+    // printf("tstp handler catch stop\n");
 }
 
 /*********************
