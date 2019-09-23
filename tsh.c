@@ -486,10 +486,11 @@ void sigtstp_handler(int sig)
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
     {
-        printf("no fg\n");
+        // printf("no fg\n");
         errno=olderrno;
         return;
     }
+    printf("catch sig\n");
     // struct job_t *t=getjobpid(jobs,fpid);
     // t->state=ST;
     // int jid=t->jid;
