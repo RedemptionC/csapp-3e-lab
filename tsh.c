@@ -110,8 +110,8 @@ int main(int argc, char **argv)
         case 'p':             /* don't print a prompt */
             emit_prompt = 0;  /* handy for automatic testing */
 	    break;
-	default:
-            usage();
+        default:
+                usage();
 	}
     }
 
@@ -407,30 +407,40 @@ void sigchld_handler(int sig)
     sigfillset(&mask_all);
     pid_t pid;
     int status;
-    while((pid=waitpid(-1,&status,WUNTRACED||WNOHANG))>0)
+    printf("0.catch stop sig\n");
+    while((pid=waitpid(-1,&status,WUNTRACED|WNOHANG))>0)
     {
-        // printf("catch sig\n");
-        // unix_error("waitpid error");
+        printf("1.catch stop sig\n");
         if(WIFSTOPPED(status))
         {
-            printf("sigchild handler catch tstp\n");
+            printf("child proc send stop\n");
+            pid_t pid=fgpid(jobs);
+            struct job_t *j=getjobpid(jobs,pid);
+            j->state=ST;
+            int jid=j->jid;
+            printf("Job [%d] (%d) stopped by signal %d\n",jid,pid,WSTOPSIG(status));
             return;
         }
         if(WIFCONTINUED(status))
         {
+            printf("sigchild handler catch continue\n");
             return;
         }
         if(WIFSIGNALED(status))
         {
-            printf("wifsignaled\n");
+            pid_t fpid=fgpid(jobs);
+            int jid=pid2jid(fpid);
+            printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,WTERMSIG(status));
+            sigprocmask(SIG_SETMASK,&mask_all,&prev_mask); 
+            deletejob(jobs,pid);
+            sigprocmask(SIG_SETMASK,&prev_mask,NULL);
             return;
         }
 
-        // printf("sigchild handler not stop not continue,pid %d \n",pid);
-        sigprocmask(SIG_SETMASK,&mask_all,&prev_mask); 
-        deletejob(jobs,pid);
-        sigprocmask(SIG_SETMASK,&prev_mask,NULL);
+        printf("sigchild handler not stop not continue,pid %d \n",pid);
+
     }
+    printf("2.catch stop sig\n");
     errno=olderrno;
 }
 
@@ -452,10 +462,10 @@ void sigint_handler(int sig)
         errno=olderrno;
         return;
     }
-    int jid=pid2jid(fpid);
+    // int jid=pid2jid(fpid);
     /*any fg job exists*/
     kill(-fpid,SIGINT); 
-    printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
+    // printf("Job [%d] (%d) terminated by signal %d\n",jid,fpid,SIGINT);
     sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     errno=olderrno;
 }
@@ -467,6 +477,7 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+    // printf("tstp handler catch stop\n");
     /*本函数只能处理发送到shell的信号，而子进程发给自己的信号会直接到sighandler*/
     int olderrno=errno;
     sigset_t mask_all,prev_mask;
@@ -475,18 +486,18 @@ void sigtstp_handler(int sig)
     pid_t fpid=fgpid(jobs);
     if(fpid==0)
     {
-        // printf("no fg job\n");
+        printf("no fg\n");
         errno=olderrno;
         return;
     }
-    struct job_t *t=getjobpid(jobs,fpid);
-    t->state=ST;
-    int jid=t->jid;
-    printf("Job [%d] (%d) stopped by signal %d\n",jid,fpid,sig);
+    // struct job_t *t=getjobpid(jobs,fpid);
+    // t->state=ST;
+    // int jid=t->jid;
+    // printf("Job [%d] (%d) stopped by signal %d\n",jid,fpid,sig);
     sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     kill(-fpid,SIGTSTP);
-    errno=olderrno;     /*现在的问题是，一旦有任务stop，即调用了本函数return之后的代码，就不能list_job*/
-    // printf("tstp handler catch stop\n");
+    errno=olderrno;     
+    printf("tstp handler catch stop\n");
 }
 
 /*********************
