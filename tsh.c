@@ -425,13 +425,13 @@ void sigchld_handler(int sig)
             printf("wifsignaled\n");
             return;
         }
-        // printf("sigchild handler not stop not continue \n");√
+
+        // printf("sigchild handler not stop not continue,pid %d \n",pid);
         sigprocmask(SIG_SETMASK,&mask_all,&prev_mask); 
         deletejob(jobs,pid);
         sigprocmask(SIG_SETMASK,&prev_mask,NULL);
     }
     errno=olderrno;
-    // return;
 }
 
 /* 
