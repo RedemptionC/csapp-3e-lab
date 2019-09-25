@@ -8,3 +8,4 @@
 * misc/
 * pipe/
 * ptest/
+* seq/
