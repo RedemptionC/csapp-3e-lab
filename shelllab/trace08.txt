@@ -1,0 +1,14 @@
+#
+# trace08.txt - Forward SIGTSTP only to foreground job.
+# echo如果不用转义，而是直接用&，就会让echo后台运行
+/bin/echo -e tsh> ./myspin 4 \046
+./myspin 4 &
+
+/bin/echo -e tsh> ./myspin 5
+./myspin 5 
+
+SLEEP 2
+TSTP
+
+/bin/echo tsh> jobs
+jobs
