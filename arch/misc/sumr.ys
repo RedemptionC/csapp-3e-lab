@@ -1,0 +1,34 @@
+	.pos 0x0
+	irmovq stack,%rsp
+	call main
+	halt
+# set data
+	.align 8
+ele1:	
+	.quad 0x00a
+	.quad ele2
+ele2:
+	.quad 0x0b0
+	.quad ele3
+ele3:
+	.quad 0xc00
+	.quad 0
+# main
+main:	irmovq ele1,%rdi
+	call sumr
+	ret
+# sumr
+sumr:	xorq %rax,%rax
+	andq %rdi,%rdi
+	je base
+	pushq %rbx
+	mrmovq (%rdi),%rbx
+	mrmovq 8(%rdi),%rdi
+	call sumr
+	addq %rbx,%rax
+	popq %rbx
+
+base:	
+	ret
+.pos 0x200 
+stack:
