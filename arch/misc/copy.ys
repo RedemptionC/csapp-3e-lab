@@ -1,0 +1,47 @@
+	.pos 0x0
+	irmovq stack,%rsp
+	call main
+	halt
+# data
+src:
+	.quad 0x00a
+	.quad 0x0b0
+	.quad 0xc00
+dest:
+	.quad 0x111
+	.quad 0x222
+	.quad 0x333
+# main
+main:	irmovq src,%rdi
+	irmovq dest,%rsi
+	irmovq $3,%rdx
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	call copy
+	popq %r13
+	popq %r12
+	popq %rbx
+	ret
+# copy
+copy:	xorq %rax,%rax
+	call test 
+
+loop:	mrmovq (%rdi),%r13 	# src->dest
+	rmmovq %r13,(%rsi)
+	xorq %r13,%rax		# checksum
+	irmovq $-1,%r12
+	addq %r12,%rdx		# len--
+	irmovq $8,%rbx
+	addq %rbx,%rdi
+	addq %rbx,%rsi		# next 
+
+
+test:	andq %rdx,%rdx
+	jg loop
+return:
+	ret
+
+.pos 0x200
+stack:
+
