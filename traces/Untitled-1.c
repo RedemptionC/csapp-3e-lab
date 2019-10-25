@@ -24,11 +24,11 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "ateam",
+    "red",
     /* First member's full name */
-    "Harry Bovik",
+    "red",
     /* First member's email address */
-    "bovik@cs.cmu.edu",
+    "M201976393@hust.edu.cn",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -44,10 +44,6 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
-/*
- * If NEXT_FIT defined use next fit search, else use first-fit search 
- */
-#define NEXT_FITx
 
 /* $begin mallocmacros */
 /* Basic constants and macros */
@@ -75,17 +71,19 @@ team_t team = {
 /* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLKP(bp)  ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE))) //line:vm:mm:nextblkp
 #define PREV_BLKP(bp)  ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE))) //line:vm:mm:prevblkp
+
+/*explicit :bp is a node in free list,compute address of next and previous node to bp*/
+#define NEXT_NODE(bp)   GET((char *)bp+WSIZE)
+#define PREV_NODE(bp)   GET(bp)
 /* $end mallocmacros */
 
 /* Global variables */
 static char *heap_listp = 0;  /* Pointer to first block */  
-#ifdef NEXT_FIT
-static char *rover;           /* Next fit rover */
-#endif
+static char *free_head=NULL;
 
 /* Function prototypes for internal helper routines */
 static void *extend_heap(size_t words);
-static void place(void *bp, size_t asize);
+static void  place(void *bp, size_t asize);
 static void *find_fit(size_t asize);
 static void *coalesce(void *bp);
 static void printblock(void *bp); 
@@ -101,18 +99,12 @@ int mm_init(void)
     /* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1) //line:vm:mm:begininit
         return -1;
-   // printf("%p\n",heap_listp);
     PUT(heap_listp, 0);                          /* Alignment padding */
     PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1)); /* Prologue header */ 
     PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ 
     PUT(heap_listp + (3*WSIZE), PACK(0, 1));     /* Epilogue header */
     heap_listp += (2*WSIZE);                     //line:vm:mm:endinit  
-    /* $end mminit */
 
-#ifdef NEXT_FIT
-    rover = heap_listp;
-#endif
-    /* $begin mminit */
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL) 
@@ -121,6 +113,57 @@ int mm_init(void)
 }
 /* $end mminit */
 
+/*
+    修改前驱后继的指针，将bp从free list中删除
+    在两种情况下被调用：
+    1.空闲块合并
+    2.place，如果剩下的块不够split，就把一整个空闲块
+    用来放置，因此需要将这整个块从free list中删除
+*/
+void freelist_delete(void * bp)
+{
+    /*
+    如果bp在链表中间，那么头指针不用改变
+    如果bp就是头节点，那么头指针指向bp的前驱
+    */
+    int fhead=bp==free_head?1:0;
+    char *nextnode=NEXT_NODE(bp);
+    char *prevnode=PREV_NODE(bp);
+    printf("bp : %p,prevnode :%p,nextnode :%p\n",bp,prevnode,nextnode);
+    if(nextnode!=NULL)
+        PUT(nextnode,prevnode);
+    if(prevnode!=NULL)
+    {
+        // printf("PUT(%p,%p)\n",prevnode+4,nextnode);
+        PUT(prevnode+WSIZE,nextnode);
+    }
+    PUT(bp,NULL);/*删除节点后，要把原来存的指针删掉，他已经 不属于free list了*/
+    PUT((char *)bp+WSIZE,NULL);
+    if(fhead)
+    {
+        free_head=prevnode;
+    }
+}
+
+/*
+    将新的空闲块插在表头
+*/
+void freelist_inserth(void *bp)
+{
+    if(free_head==NULL)
+    {
+        /*
+        第一个空闲块，除了要让头指针指向它，还要设置它的前驱后继为NULL        */
+        free_head=bp;
+        PUT(free_head,NULL);
+        PUT((char *)free_head+WSIZE,NULL);
+        return;
+    }
+    PUT(bp,free_head);
+    PUT((char *)bp+WSIZE,NULL);
+    PUT(free_head+WSIZE,bp);
+    free_head=bp;
+}
 /* 
  * mm_malloc - Allocate a block with at least size bytes of payload 
  */
@@ -148,8 +191,9 @@ void *mm_malloc(size_t size)
 
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {  //line:vm:mm:findfitcall
-        place(bp, asize);                  //line:vm:mm:findfitplace
+        place(bp, asize);                  /*问题在这，我在place里已经修改bp了，为什么返回后又没了？？*/
         return bp;
+        // return coalesce(bp);//bp指向分配好的块，所以不应该coalesce
     }
 
     /* No fit found. Get more memory and place the block */
@@ -181,6 +225,7 @@ void mm_free(void *bp)
 
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
+    freelist_inserth(bp);
     coalesce(bp);
 }
 
@@ -191,8 +236,10 @@ void mm_free(void *bp)
 /* $begin mmfree */
 static void *coalesce(void *bp) 
 {
-    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+    char * prevblock=PREV_BLKP(bp);
+    char * nextblock=NEXT_BLKP(bp);
+    size_t prev_alloc = GET_ALLOC(FTRP(prevblock));
+    size_t next_alloc = GET_ALLOC(HDRP(nextblock));
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {            /* Case 1 */
@@ -203,13 +250,18 @@ static void *coalesce(void *bp)
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size,0));
+        freelist_delete(nextblock);
     }
 
     else if (!prev_alloc && next_alloc) {      /* Case 3 */
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-        PUT(FTRP(bp), PACK(size, 0));
+        PUT(FTRP(bp), PACK(size, 0));/*设置合并之后的header和footer*/
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-        bp = PREV_BLKP(bp);
+        freelist_delete(bp);
+        bp = PREV_BLKP(bp);//？
+        /*
+        合并之后，对应的指针要删掉
+        */
     }
 
     else {                                     /* Case 4 */
@@ -218,15 +270,10 @@ static void *coalesce(void *bp)
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
+        freelist_delete(prevblock);
+        freelist_delete(nextblock);
     }
-    /* $end mmfree */
-#ifdef NEXT_FIT
-    /* Make sure the rover isn't pointing into the free block */
-    /* that we just coalesced */
-    if ((rover > (char *)bp) && (rover < NEXT_BLKP(bp))) 
-        rover = bp;
-#endif
-    /* $begin mmfree */
+
     return bp;
 }
 /* $end mmfree */
@@ -297,6 +344,7 @@ static void *extend_heap(size_t words)
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));         /* Free block header */   //line:vm:mm:freeblockhdr
     PUT(FTRP(bp), PACK(size, 0));         /* Free block footer */   //line:vm:mm:freeblockftr
+    freelist_inserth(bp);
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1)); /* New epilogue header */ //line:vm:mm:newepihdr
 
     /* Coalesce if the previous block was free */
@@ -316,56 +364,65 @@ static void place(void *bp, size_t asize)
     size_t csize = GET_SIZE(HDRP(bp));   
 
     if ((csize - asize) >= (2*DSIZE)) { 
-        PUT(HDRP(bp), PACK(asize, 1));
+        char *nextnode=NEXT_NODE(bp);
+        char *prevnode=PREV_NODE(bp);/*保存原来块在freelist中的前驱后继*/
+        PUT(HDRP(bp), PACK(asize, 1));/*大空闲块中用来分配的，设置head和footer*/
         PUT(FTRP(bp), PACK(asize, 1));
-        bp = NEXT_BLKP(bp);
+        int fhead=bp==free_head?1:0;/*bp是表头吗*/
+        bp = NEXT_BLKP(bp);/*bp指向remaing free block*/
+        /*
+            now bp points to the remaining block
+            修改前驱后继以及remaining block的指针，使remaining block
+            处于原来的位置
+        */
+        if(nextnode!=NULL)
+            PUT(nextnode,bp);/*debug:对于第一个chunk，也是第一个空闲块，他的前驱后继为NULL，所以这里是向NULL写*/
+        if(prevnode!=NULL)
+            PUT(prevnode+WSIZE,bp);
+        PUT(bp,prevnode);   /*设置剩下自由块的前驱后继指针（与原自由块相同）*/
+        PUT((char *)bp+WSIZE,nextnode);
+        if(fhead)
+        {
+            free_head=bp;/*如果bp原来是表头，现在头指针仍指向它*/
+        }
+
         PUT(HDRP(bp), PACK(csize-asize, 0));
-        PUT(FTRP(bp), PACK(csize-asize, 0));
+        PUT(FTRP(bp), PACK(csize-asize, 0));/*设置剩下自由块的header和footer*/
     }
     else { 
         PUT(HDRP(bp), PACK(csize, 1));
+        /*
+            delete from free list
+            modify next and previous node's pointers to it
+            修改后继的前驱为自己的前驱，前驱的后继为自己的后继
+        */
         PUT(FTRP(bp), PACK(csize, 1));
+        freelist_delete(bp);
     }
+    // return bp;
 }
 /* $end mmplace */
 
 /* 
  * find_fit - Find a fit for a block with asize bytes 
  */
-/* $begin mmfirstfit */
-/* $begin mmfirstfit-proto */
+
 static void *find_fit(size_t asize)
-/* $end mmfirstfit-proto */
 {
-    /* $end mmfirstfit */
-
-#ifdef NEXT_FIT 
-    /* Next fit search */
-    char *oldrover = rover;
-
-    /* Search from the rover to the end of list */
-    for ( ; GET_SIZE(HDRP(rover)) > 0; rover = NEXT_BLKP(rover))
-        if (!GET_ALLOC(HDRP(rover)) && (asize <= GET_SIZE(HDRP(rover))))
-            return rover;
-
-    /* search from start of list to old rover */
-    for (rover = heap_listp; rover < oldrover; rover = NEXT_BLKP(rover))
-        if (!GET_ALLOC(HDRP(rover)) && (asize <= GET_SIZE(HDRP(rover))))
-            return rover;
-
-    return NULL;  /* no fit found */
-#else 
-    /* $begin mmfirstfit */
+    /*no free block*/
+    if(free_head==NULL)
+        return NULL;
     /* First-fit search */
     void *bp;
 
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+    for (bp = free_head; bp!=NULL; bp = NEXT_NODE(bp)) {
+        if (asize <= GET_SIZE(HDRP(bp)))
+        {
             return bp;
         }
     }
     return NULL; /* No fit */
-#endif
+
 }
 /* $end mmfirstfit */
 
@@ -394,7 +451,10 @@ static void checkblock(void *bp)
     if ((size_t)bp % 8)
         printf("Error: %p is not doubleword aligned\n", bp);
     if (GET(HDRP(bp)) != GET(FTRP(bp)))
+    {
         printf("Error: header does not match footer\n");
+        exit(1);
+    }
 }
 
 /* 
@@ -407,10 +467,15 @@ void checkheap(int verbose)
     if (verbose)
         printf("Heap (%p):\n", heap_listp);
 
+    /*检查prologue的header size是否为8，是否为allocated*/
     if ((GET_SIZE(HDRP(heap_listp)) != DSIZE) || !GET_ALLOC(HDRP(heap_listp)))
+    {
         printf("Bad prologue header\n");
+        exit(1);
+    }
     checkblock(heap_listp);
 
+    /*检查每个块是否对齐，是否header和footer里的size相等*/
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         if (verbose) 
             printblock(bp);
@@ -421,4 +486,21 @@ void checkheap(int verbose)
         printblock(bp);
     if ((GET_SIZE(HDRP(bp)) != 0) || !(GET_ALLOC(HDRP(bp))))
         printf("Bad epilogue header\n");
+
+    /*检查free list*/
+    void * t=free_head;
+    for(;t!=NULL;t=PREV_NODE(t))
+    {
+        if(verbose)
+        {
+            printf("free node * %p * ",t);
+            printblock(t);
+        }
+        if(GET_ALLOC(HDRP(t))!=0)
+        {
+            printf("%p free node not marked as free\n",t);
+            exit(1);
+        }
+
+    }
 }
