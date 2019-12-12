@@ -12,3 +12,4 @@ datalab没有做完，bomb~~比较简单~~，主要是隔的时间太长，文�
 毕竟csapp不算是本看一遍就完了的书，至少对于我来说**
 
 **另：因为csapp，对cmu的好感大增，之前种草的6.828可能不做了，还是跟cmu的os和网络**
+![test pic](https://github.com/Redemptionc/csapp-3e-lab/raw/master/pics/wallhaven-vg3ddp.png)
