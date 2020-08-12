@@ -10,6 +10,3 @@ datalab没有做完，bomb~~比较简单~~，主要是隔的时间太长，文�
 
 **因为一直在赶进度，所以一些优化的工作并没有做到很极致，datalab也因为自己的短见（觉得位运算是奇淫巧技QAQ）没有做完，希望以后能抽出时间按补齐，
 毕竟csapp不算是本看一遍就完了的书，至少对于我来说**
-
-**另：因为csapp，对cmu的好感大增，之前种草的6.828可能不做了，还是跟cmu的os和网络**
-![test pic](https://github.com/Redemptionc/csapp-3e-lab/raw/master/pics/wallhaven-vg3ddp.png)
