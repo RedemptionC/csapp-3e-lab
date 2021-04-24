@@ -122,5 +122,65 @@ OS主要使用了这几个abstraction：
 * 虚拟内存 ： 是对内存和**磁盘文件**的抽象（**比如我们以为在内存中的，其实并不一定在？而是先从disk读到内存？**）
 * 文件：是对IO设备的抽象
 
-#### 进程
+#### process
 
+就是对运行的程序的一种抽象，使得看起来该程序是在独占CPU，而实际上，一台电脑是同时在执行多个程序的，即使对于单核，也能并发的执行多个程序：通过在不同进程之间switch，从而让不同进程的指令交错执行
+
+![image-20210421162105414](https://raw.githubusercontent.com/RedemptionC/cloudimg/master/img/image-20210421162105414.png)
+
+#### thread
+
+一个进程可以有多个线程，线程之间（**一个进程之内？**）是共享地址空间的，切换起来也更加高效
+
+[SO-what threads share](https://stackoverflow.com/questions/1762418/what-resources-are-shared-between-threads)
+
+#### virtual memory
+
+对内存的一种抽象，让每个进程认为自己是独占内存，并且把每个内存看成一个巨大的一维数组
+
+![image-20210421162740143](https://raw.githubusercontent.com/RedemptionC/cloudimg/master/img/image-20210421162740143.png)
+
+#### file
+
+对io设备的抽象，文件就是字节流，好处是可以用统一的方式处理IO：读文件，读socket等
+
+### Systems Communicate with Other Systems Using Networks
+
+网络也是一种IO设备
+
+### ![image-20210421162921810](https://raw.githubusercontent.com/RedemptionC/cloudimg/master/img/image-20210421162921810.png) (some) Important Themes
+
+#### Amdahl’s Law
+
+当我们对系统中某个部分加速（提升性能）时，对整体的提升取决于该部分的重要性以及提升了多少。
+
+要想对整体有显著提升，必须提升全系统中大部分component
+
+*其实和偏科啥的一个性质，平均水平高，总分就高*
+
+#### Concurrency and Parallelism
+
+**这里说并行是通过并发来使一个系统运行的更快，但是我印象中提到并行，都是强调他和并发的区别，即后者是交错运行，前者是同时执行**
+
+三个水平上的并发：（主要打交道的是第一种，第二种也会有专门介绍，第三种就是一笔带过）
+
+* 线程水平：
+
+![image-20210421163954349](https://raw.githubusercontent.com/RedemptionC/cloudimg/master/img/image-20210421163954349.png)
+
+对于单处理器，也可以通过模拟实现多线程（即快速的在不同线程间切换，简单的例子就是之前做过的用户级线程），当然这里也提到了hyperthreading（一个cpu运行多个线程），有了多处理器后，就能同时执行多个线程
+
+* 指令水平：即同时执行多条指令（**问：流水线算指令水平的并行吗，还是说要super scalar才算？**）
+* SIMD
+
+#### The Importance of Abstractions in Computer Systems
+
+![image-20210421164458324](https://raw.githubusercontent.com/RedemptionC/cloudimg/master/img/image-20210421164458324.png)
+
+abstraction的作用是，屏蔽底层细节，让我们通过暴露出来的一组接口去使用他们提供的服务
+
+## chap 2:Representing and Manipulating Information
+
+本章主要研究无符号数，有符号数，浮点数（**之前浮点数掌握的比较差**）
+
+### Information Storage
